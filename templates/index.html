@@ -483,11 +483,35 @@
   </div>
 </div>
 
+<!-- Tunnel Domain Modal -->
+<div class="modal-backdrop" id="tunnel-modal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>🔗</span> Playit Tunnel Domain
+    </div>
+
+    <div class="form-group">
+      <label>Tunnel Domain <span class="label-hint">from Playit dashboard</span></label>
+      <input type="text" id="tunnel-domain-input" placeholder="e.g., public-equation.gl.joinmc.link:25565" />
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px">
+        Create a tunnel in your <a href="https://playit.gg" target="_blank" style="color:var(--blue)">Playit dashboard</a> and paste the address here (including port).
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeTunnelModal()">Cancel</button>
+      <button class="btn btn-ghost" id="tunnel-clear-btn" onclick="clearTunnelDomain()" style="color:var(--red)">Clear</button>
+      <button class="btn btn-primary" onclick="saveTunnelDomain()">Save Domain</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div id="toast-container"></div>
 
 <script>
 let serversData = {};
+let tunnelModalServerId = null;
 
 async function fetchServers() {
   try {
@@ -503,7 +527,7 @@ function updateStats(data) {
   const arr = Object.values(data);
   document.getElementById('stat-total').textContent = arr.length;
   document.getElementById('stat-running').textContent = arr.filter(s => s.status === 'running').length;
-  document.getElementById('stat-tunnels').textContent = arr.filter(s => s.tunnel_ip).length;
+  document.getElementById('stat-tunnels').textContent = arr.filter(s => s.tunnel_domain).length;
 }
 
 function renderServers(data) {
@@ -527,14 +551,14 @@ function renderCard(id, s) {
   const statusLabel = s.status || 'stopped';
   const running = s.status === 'running';
 
-  const tunnelHtml = s.tunnel_ip
+  const tunnelHtml = s.tunnel_domain
     ? `<div class="tunnel-info">
         <div class="label">Connect Address</div>
-        <div class="addr">${s.tunnel_ip}:${s.tunnel_port}</div>
+        <div class="addr">${esc(s.tunnel_domain)}</div>
        </div>`
     : `<div class="tunnel-info">
         <div class="label">Connect Address</div>
-        <div class="addr pending">No tunnel — start playit.gg</div>
+        <div class="addr pending">No tunnel domain set</div>
        </div>`;
 
   return `
@@ -566,6 +590,7 @@ function renderCard(id, s) {
         ? `<button class="btn btn-ghost btn-sm" onclick="stopServer('${id}')">⏹ Stop</button>`
         : `<button class="btn btn-primary btn-sm" onclick="startServer('${id}')">▶ Start</button>`
       }
+      <button class="btn btn-ghost btn-sm" onclick="openTunnelModal('${id}', ${JSON.stringify(esc(s.tunnel_domain || ''))})">🔗 Tunnel</button>
       <button class="btn btn-ghost btn-sm" onclick="deleteServer('${id}')">🗑</button>
     </div>
   </div>`;
@@ -625,6 +650,51 @@ async function createServer() {
   fetchServers();
 }
 
+function openTunnelModal(serverId, currentDomain) {
+  tunnelModalServerId = serverId;
+  const input = document.getElementById('tunnel-domain-input');
+  input.value = currentDomain || '';
+  const clearBtn = document.getElementById('tunnel-clear-btn');
+  clearBtn.style.display = currentDomain ? 'inline-flex' : 'none';
+  document.getElementById('tunnel-modal').classList.add('open');
+}
+
+function closeTunnelModal() {
+  document.getElementById('tunnel-modal').classList.remove('open');
+  tunnelModalServerId = null;
+}
+
+async function saveTunnelDomain() {
+  const domain = document.getElementById('tunnel-domain-input').value.trim();
+  if (!domain) { toast('Domain is required', 'error'); return; }
+  if (!tunnelModalServerId) return;
+  
+  const res = await fetch(`/api/servers/${tunnelModalServerId}/tunnel/set-domain`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({domain})
+  });
+  const data = await res.json();
+  if (data.error) { toast(data.error, 'error'); return; }
+  toast('Tunnel domain saved!', 'success');
+  closeTunnelModal();
+  fetchServers();
+}
+
+async function clearTunnelDomain() {
+  if (!confirm('Clear tunnel domain for this server?')) return;
+  if (!tunnelModalServerId) return;
+  
+  const res = await fetch(`/api/servers/${tunnelModalServerId}/tunnel/clear`, {
+    method: 'POST'
+  });
+  const data = await res.json();
+  if (data.error) { toast(data.error, 'error'); return; }
+  toast('Tunnel domain cleared.', 'success');
+  closeTunnelModal();
+  fetchServers();
+}
+
 function toast(msg, type='success') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
@@ -637,9 +707,12 @@ function toast(msg, type='success') {
 fetchServers();
 setInterval(fetchServers, 5000);
 
-// Close modal on backdrop click
+// Close modals on backdrop click
 document.getElementById('create-modal').addEventListener('click', function(e) {
   if (e.target === this) closeCreateModal();
+});
+document.getElementById('tunnel-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeTunnelModal();
 });
 </script>
 </body>

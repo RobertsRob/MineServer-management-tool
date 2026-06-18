@@ -21,11 +21,6 @@ JAVA_MIN_RAM = "512M"
 server_processes = {}   # server_id -> subprocess.Popen
 server_logs = {}        # server_id -> list of log lines
 server_log_queues = {}  # server_id -> list of queue.Queue (websocket listeners)
-playit_processes = {}   # server_id -> subprocess.Popen
-playit_tunnels = {}     # server_id -> {"ip": ..., "port": ...}
-
-PLAYIT_DOMAIN = "public-equation.gl.joinmc.link"
-PLAYIT_PORT = 25565
 
 os.makedirs(SERVERS_DIR, exist_ok=True)
 
@@ -76,32 +71,7 @@ def stream_output(server_id, proc):
         save_servers(servers)
 
 
-def stream_playit_output(server_id, proc):
-    """Background thread: read playit stdout to capture tunnel address."""
-    for raw in proc.stdout:
-        line = raw.decode('utf-8', errors='replace').rstrip()
-        broadcast_log(server_id, f"[playit] {line}")
-        # Try to detect assigned address lines like:
-        # "TCP tunnel: 1.2.3.4:25565" or "address: sg1.joinmc.link:12345"
-        import re
-        m = re.search(r'(\d+\.\d+\.\d+\.\d+):(\d+)', line)
-        if m:
-            playit_tunnels[server_id] = {"ip": m.group(1), "port": m.group(2)}
-            servers = load_servers()
-            if server_id in servers:
-                servers[server_id]['tunnel_ip'] = m.group(1)
-                servers[server_id]['tunnel_port'] = m.group(2)
-                save_servers(servers)
-        # hostname:port pattern
-        m2 = re.search(r'address[:\s]+([a-zA-Z0-9.\-]+):(\d+)', line, re.IGNORECASE)
-        if m2:
-            playit_tunnels[server_id] = {"ip": m2.group(1), "port": m2.group(2)}
-            servers = load_servers()
-            if server_id in servers:
-                servers[server_id]['tunnel_ip'] = m2.group(1)
-                servers[server_id]['tunnel_port'] = m2.group(2)
-                save_servers(servers)
-    proc.stdout.close()
+
 
 
 # ─── Routes ────────────────────────────────────────────────────────────────────
@@ -132,9 +102,6 @@ def api_list_servers():
             s['status'] = 'running'
         else:
             s['status'] = s.get('status', 'stopped')
-        if sid in playit_tunnels:
-            s['tunnel_ip'] = PLAYIT_DOMAIN
-            s['tunnel_port'] = PLAYIT_PORT
     return jsonify(servers)
 
 
@@ -183,8 +150,7 @@ def api_create_server():
         'jar_url': jar_url,
         'jar_path': jar_path,
         'dir': server_dir,
-        'tunnel_ip': None,
-        'tunnel_port': None,
+        'tunnel_domain': None,
     }
     save_servers(servers)
 
@@ -369,57 +335,34 @@ def api_new_world(server_id):
     return jsonify({'status': 'world deleted'})
 
 
-@app.route('/api/servers/<server_id>/tunnel/start', methods=['POST'])
-def api_start_tunnel(server_id):
-    """Start a playit.gg tunnel for the given server."""
+@app.route('/api/servers/<server_id>/tunnel/set-domain', methods=['POST'])
+def api_set_tunnel_domain(server_id):
+    """Set the Playit tunnel domain for the given server."""
     servers = load_servers()
     if server_id not in servers:
         return jsonify({'error': 'Not found'}), 404
 
-    existing = playit_processes.get(server_id)
-    if existing and existing.poll() is None:
-        return jsonify({'error': 'Tunnel already running'}), 400
+    domain = request.json.get('domain', '').strip()
+    if not domain:
+        return jsonify({'error': 'Domain is required'}), 400
 
-    port = servers[server_id].get('port', 25565)
-    secret = request.json.get('secret', '')  # playit.gg secret key
-
-    # Check if playit is available
-    playit_bin = shutil.which('playit') or '/usr/local/bin/playit'
-
-    cmd_args = [playit_bin]
-    if secret:
-        cmd_args += ['--secret', secret]
-
-    try:
-        proc = subprocess.Popen(
-            cmd_args,
-            cwd=get_server_dir(server_id),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
-        playit_processes[server_id] = proc
-        t = threading.Thread(target=stream_playit_output, args=(server_id, proc), daemon=True)
-        t.start()
-        broadcast_log(server_id, f"[Panel] playit.gg tunnel started (PID {proc.pid}) for port {port}")
-        return jsonify({'status': 'tunnel starting'})
-    except FileNotFoundError:
-        return jsonify({'error': 'playit binary not found. Install playit.gg on this machine first.'}), 500
+    servers[server_id]['tunnel_domain'] = domain
+    save_servers(servers)
+    broadcast_log(server_id, f"[Panel] Tunnel domain set to: {domain}")
+    return jsonify({'status': 'tunnel domain set', 'domain': domain})
 
 
-@app.route('/api/servers/<server_id>/tunnel/stop', methods=['POST'])
-def api_stop_tunnel(server_id):
-    proc = playit_processes.get(server_id)
-    if proc and proc.poll() is None:
-        proc.terminate()
-        broadcast_log(server_id, "[Panel] Tunnel stopped.")
-        playit_tunnels.pop(server_id, None)
-        servers = load_servers()
-        if server_id in servers:
-            servers[server_id]['tunnel_ip'] = None
-            servers[server_id]['tunnel_port'] = None
-            save_servers(servers)
-        return jsonify({'status': 'stopped'})
-    return jsonify({'error': 'Not running'}), 400
+@app.route('/api/servers/<server_id>/tunnel/clear', methods=['POST'])
+def api_clear_tunnel_domain(server_id):
+    """Clear the Playit tunnel domain for the given server."""
+    servers = load_servers()
+    if server_id not in servers:
+        return jsonify({'error': 'Not found'}), 404
+
+    servers[server_id]['tunnel_domain'] = None
+    save_servers(servers)
+    broadcast_log(server_id, "[Panel] Tunnel domain cleared.")
+    return jsonify({'status': 'tunnel domain cleared'})
 
 
 @app.route('/api/servers/<server_id>', methods=['DELETE'])
@@ -431,10 +374,6 @@ def api_delete_server(server_id):
     proc = server_processes.get(server_id)
     if proc and proc.poll() is None:
         proc.terminate()
-
-    tp = playit_processes.get(server_id)
-    if tp and tp.poll() is None:
-        tp.terminate()
 
     server_dir = servers[server_id].get('dir')
     if server_dir and os.path.exists(server_dir):
@@ -457,14 +396,9 @@ def api_get_status(server_id):
         return jsonify({'error': 'Not found'}), 404
     proc = server_processes.get(server_id)
     running = proc and proc.poll() is None
-    tunnel_proc = playit_processes.get(server_id)
-    tunnel_running = tunnel_proc and tunnel_proc.poll() is None
-    t_info = playit_tunnels.get(server_id, {})
     return jsonify({
         'running': running,
-        'tunnel_running': tunnel_running,
-        'tunnel_ip': t_info.get('ip', servers[server_id].get('tunnel_ip')),
-        'tunnel_port': t_info.get('port', servers[server_id].get('tunnel_port')),
+        'tunnel_domain': servers[server_id].get('tunnel_domain'),
         'status': servers[server_id].get('status'),
     })
 

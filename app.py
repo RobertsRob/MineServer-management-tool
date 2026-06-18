@@ -24,6 +24,9 @@ server_log_queues = {}  # server_id -> list of queue.Queue (websocket listeners)
 playit_processes = {}   # server_id -> subprocess.Popen
 playit_tunnels = {}     # server_id -> {"ip": ..., "port": ...}
 
+PLAYIT_DOMAIN = "public-equation.gl.joinmc.link"
+PLAYIT_PORT = 25565
+
 os.makedirs(SERVERS_DIR, exist_ok=True)
 
 
@@ -130,8 +133,8 @@ def api_list_servers():
         else:
             s['status'] = s.get('status', 'stopped')
         if sid in playit_tunnels:
-            s['tunnel_ip'] = playit_tunnels[sid]['ip']
-            s['tunnel_port'] = playit_tunnels[sid]['port']
+            s['tunnel_ip'] = PLAYIT_DOMAIN
+            s['tunnel_port'] = PLAYIT_PORT
     return jsonify(servers)
 
 

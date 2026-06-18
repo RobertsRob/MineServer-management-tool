@@ -473,11 +473,11 @@
       <!-- Connect address -->
       <div class="connect-card" id="connect-card">
         <div class="connect-label">Connect Address</div>
-        <div class="connect-addr {% if not server.tunnel_ip %}pending{% endif %}" id="connect-addr">
-          {% if server.tunnel_ip %}{{ server.tunnel_ip }}:{{ server.tunnel_port }}
-          {% else %}No tunnel active{% endif %}
+        <div class="connect-addr {% if not server.tunnel_domain %}pending{% endif %}" id="connect-addr">
+          {% if server.tunnel_domain %}{{ server.tunnel_domain }}
+          {% else %}No tunnel domain set{% endif %}
         </div>
-        {% if server.tunnel_ip %}
+        {% if server.tunnel_domain %}
         <button class="connect-copy" onclick="copyAddr()">Copy address</button>
         {% endif %}
       </div>
@@ -496,18 +496,18 @@
 
     <!-- playit.gg Tunnel -->
     <div class="sidebar-section">
-      <div class="sidebar-label">playit.gg Tunnel</div>
+      <div class="sidebar-label">Playit Tunnel</div>
       <div class="playit-form">
-        <input type="text" id="playit-secret" placeholder="Secret key (optional)" />
-        <button class="btn btn-blue" onclick="startTunnel()">🔗 Start Tunnel</button>
-        <button class="btn btn-ghost" onclick="stopTunnel()">✖ Stop Tunnel</button>
+        <input type="text" id="tunnel-domain-input" placeholder="e.g., public-equation.gl.joinmc.link:25565" value="{% if server.tunnel_domain %}{{ server.tunnel_domain }}{% endif %}" />
+        <button class="btn btn-blue" onclick="saveTunnelDomain()">✓ Save Domain</button>
+        <button class="btn btn-ghost" onclick="clearTunnelDomain()">✖ Clear Domain</button>
       </div>
       <div class="tunnel-status" id="tunnel-status">
-        {% if server.tunnel_ip %}
-        Tunnel active → {{ server.tunnel_ip }}:{{ server.tunnel_port }}
+        {% if server.tunnel_domain %}
+        Connected → {{ server.tunnel_domain }}
         {% else %}
-        Tunnel not running.<br>
-        Make sure <code>playit</code> is installed on this machine.
+        No tunnel domain configured.<br>
+        <a href="https://playit.gg" target="_blank" style="color:var(--blue);text-decoration:underline">Create a tunnel</a> in Playit and paste the address above.
         {% endif %}
       </div>
     </div>
@@ -679,28 +679,31 @@ async function doNewWorld() {
 
 // ─── Tunnel ──────────────────────────────────────────────────────────────────
 
-async function startTunnel() {
-  const secret = document.getElementById('playit-secret').value.trim();
-  const res = await fetch(`/api/servers/${SERVER_ID}/tunnel/start`, {
+async function saveTunnelDomain() {
+  const domain = document.getElementById('tunnel-domain-input').value.trim();
+  if (!domain) { toast('Domain is required', 'error'); return; }
+  
+  const res = await fetch(`/api/servers/${SERVER_ID}/tunnel/set-domain`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({secret})
+    body: JSON.stringify({domain})
   });
   const data = await res.json();
-  if (data.error) toast(data.error, 'error');
-  else toast('Tunnel starting… watch console for address.', 'success');
+  if (data.error) { toast(data.error, 'error'); return; }
+  toast('Tunnel domain saved!', 'success');
+  pollStatus();
 }
 
-async function stopTunnel() {
-  const res = await fetch(`/api/servers/${SERVER_ID}/tunnel/stop`, {method:'POST'});
+async function clearTunnelDomain() {
+  if (!confirm('Clear tunnel domain?')) return;
+  const res = await fetch(`/api/servers/${SERVER_ID}/tunnel/clear`, {
+    method: 'POST'
+  });
   const data = await res.json();
-  if (data.error) toast(data.error, 'error');
-  else {
-    toast('Tunnel stopped.', 'success');
-    document.getElementById('connect-addr').textContent = 'No tunnel active';
-    document.getElementById('connect-addr').classList.add('pending');
-    document.getElementById('tunnel-status').textContent = 'Tunnel not running.';
-  }
+  if (data.error) { toast(data.error, 'error'); return; }
+  toast('Tunnel domain cleared.', 'success');
+  document.getElementById('tunnel-domain-input').value = '';
+  pollStatus();
 }
 
 // ─── Status polling ──────────────────────────────────────────────────────────
@@ -730,12 +733,18 @@ async function pollStatus() {
     }
 
     // Update tunnel display
-    if (data.tunnel_ip) {
-      const addr = `${data.tunnel_ip}:${data.tunnel_port}`;
+    if (data.tunnel_domain) {
       const el = document.getElementById('connect-addr');
-      el.textContent = addr;
+      el.textContent = data.tunnel_domain;
       el.classList.remove('pending');
-      document.getElementById('tunnel-status').textContent = `Tunnel active → ${addr}`;
+      document.getElementById('tunnel-domain-input').value = data.tunnel_domain;
+      document.getElementById('tunnel-status').textContent = `Connected → ${data.tunnel_domain}`;
+    } else {
+      const el = document.getElementById('connect-addr');
+      el.textContent = 'No tunnel domain set';
+      el.classList.add('pending');
+      document.getElementById('tunnel-domain-input').value = '';
+      document.getElementById('tunnel-status').innerHTML = 'No tunnel domain configured.<br><a href="https://playit.gg" target="_blank" style="color:var(--blue);text-decoration:underline">Create a tunnel</a> in Playit and paste the address above.';
     }
   } catch(e) {}
 }

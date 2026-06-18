@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ server.name }} — MC Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --green: #3fb950;
+    --green-dim: #1a4a1e;
+    --red: #f85149;
+    --red-dim: #3d1a1a;
+    --yellow: #d29922;
+    --yellow-dim: #3d2e0a;
+    --blue: #58a6ff;
+    --purple: #bc8cff;
+    --text: #e6edf3;
+    --text-muted: #7d8590;
+    --text-dim: #484f58;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+    --radius: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    flex-shrink: 0;
+  }
+
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--green);
+    text-decoration: none;
+  }
+
+  .nav-logo .cube {
+    width: 28px; height: 28px;
+    background: var(--green);
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    color: #0d1117;
+  }
+
+  .breadcrumb {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .breadcrumb a { color: var(--text-muted); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--text); }
+  .breadcrumb span { margin: 0 6px; }
+
+  nav .spacer { flex: 1; }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-family: var(--mono);
+  }
+
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+  }
+
+  /* ─── Main layout: sidebar + console ─── */
+  .main {
+    display: flex;
+    flex: 1;
+    height: calc(100vh - 56px);
+    overflow: hidden;
+  }
+
+  .sidebar {
+    width: 300px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar-section {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text-dim);
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+
+  .server-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+
+  .meta-key { color: var(--text-muted); }
+  .meta-val { color: var(--text); font-family: var(--mono); font-size: 11px; }
+
+  /* ─── Connect address card ─── */
+  .connect-card {
+    background: var(--green-dim);
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    padding: 14px;
+    margin-top: 12px;
+  }
+
+  .connect-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--green); margin-bottom: 4px; }
+  .connect-addr { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--green); word-break: break-all; }
+  .connect-addr.pending { color: var(--yellow); }
+
+  .connect-copy {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--green);
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: var(--sans);
+    padding: 0;
+    text-decoration: underline;
+  }
+
+  /* ─── Action buttons ─── */
+  .action-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border-radius: var(--radius);
+    border: none;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity .15s;
+    width: 100%;
+    text-align: left;
+  }
+
+  .btn:hover { opacity: .8; }
+  .btn-green { background: var(--green); color: #0d1117; }
+  .btn-red { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-yellow { background: var(--yellow-dim); color: var(--yellow); border: 1px solid var(--yellow); }
+  .btn-blue { background: var(--blue-dim, #1a2a3d); color: var(--blue); border: 1px solid var(--blue); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ─── Tunnel section ─── */
+  .playit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .playit-form input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 7px 10px;
+    width: 100%;
+    outline: none;
+  }
+
+  .playit-form input:focus { border-color: var(--blue); }
+
+  .tunnel-status {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+
+  /* ─── Console ─── */
+  .console-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .console-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .console-title {
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--mono);
+    color: var(--green);
+  }
+
+  .console-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+  .console-clear {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: var(--sans);
+    padding: 4px 10px;
+    border-radius: 4px;
+    transition: background .15s;
+  }
+
+  .console-clear:hover { background: var(--surface2); color: var(--text); }
+
+  .console-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    background: var(--bg);
+  }
+
+  .log-line { white-space: pre-wrap; word-break: break-all; }
+  .log-line.panel { color: var(--blue); }
+  .log-line.warn { color: var(--yellow); }
+  .log-line.error { color: var(--red); }
+  .log-line.info { color: var(--text); }
+  .log-line.playit { color: var(--purple); }
+
+  .console-input-row {
+    display: flex;
+    gap: 0;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .console-prompt {
+    background: var(--surface2);
+    border: none;
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--green);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .console-input {
+    flex: 1;
+    background: var(--surface2);
+    border: none;
+    border-left: 1px solid var(--border);
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+  }
+
+  .console-send {
+    background: var(--green);
+    color: #0d1117;
+    border: none;
+    padding: 12px 18px;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+
+  .console-send:hover { opacity: .85; }
+
+  /* ─── Toast ─── */
+  #toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 999;
+  }
+
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    animation: slideIn .2s ease;
+  }
+
+  .toast.success { border-color: var(--green); }
+  .toast.error { border-color: var(--red); }
+
+  @keyframes slideIn { from{transform:translateX(30px);opacity:0} to{transform:none;opacity:1} }
+
+  /* ─── Modal ─── */
+  .modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.75);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    max-width: 440px;
+    width: 100%;
+  }
+
+  .modal-title {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .modal-body {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  .btn-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: opacity .15s;
+  }
+
+  .btn-inline:hover { opacity: .8; }
+  .btn-inline-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-inline-red { background: var(--red); color: #fff; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">
+    <span class="cube">⛏</span>
+    MC Panel
+  </a>
+  <div class="breadcrumb">
+    <span>/</span>
+    <a href="/">servers</a>
+    <span>/</span>
+    <strong>{{ server.name }}</strong>
+  </div>
+  <span class="spacer"></span>
+  <div class="status-pill" id="status-pill">
+    <span class="status-dot" id="status-dot" style="background: var(--text-dim)"></span>
+    <span id="status-text">{{ server.status }}</span>
+  </div>
+</nav>
+
+<div class="main">
+  <!-- ─── Sidebar ─── -->
+  <div class="sidebar">
+
+    <!-- Info -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">Server Info</div>
+      <div class="server-meta">
+        <div class="meta-row">
+          <span class="meta-key">Type</span>
+          <span class="meta-val">{{ server.server_type }} {{ server.version }}</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-key">Port</span>
+          <span class="meta-val">{{ server.port }}</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-key">RAM</span>
+          <span class="meta-val">{{ server.ram }}MB</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-key">Subdomain</span>
+          <span class="meta-val">{{ server.subdomain }}</span>
+        </div>
+      </div>
+
+      <!-- Connect address -->
+      <div class="connect-card" id="connect-card">
+        <div class="connect-label">Connect Address</div>
+        <div class="connect-addr {% if not server.tunnel_ip %}pending{% endif %}" id="connect-addr">
+          {% if server.tunnel_ip %}{{ server.tunnel_ip }}:{{ server.tunnel_port }}
+          {% else %}No tunnel active{% endif %}
+        </div>
+        {% if server.tunnel_ip %}
+        <button class="connect-copy" onclick="copyAddr()">Copy address</button>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">Controls</div>
+      <div class="action-list">
+        <button class="btn btn-green" id="btn-start" onclick="startServer()">▶ Start Server</button>
+        <button class="btn btn-red" id="btn-stop" onclick="stopServer()">⏹ Stop Server</button>
+        <button class="btn btn-ghost" onclick="restartServer()">↺ Restart Server</button>
+        <button class="btn btn-yellow" onclick="confirmNewWorld()">🌍 Generate New World</button>
+      </div>
+    </div>
+
+    <!-- playit.gg Tunnel -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">playit.gg Tunnel</div>
+      <div class="playit-form">
+        <input type="text" id="playit-secret" placeholder="Secret key (optional)" />
+        <button class="btn btn-blue" onclick="startTunnel()">🔗 Start Tunnel</button>
+        <button class="btn btn-ghost" onclick="stopTunnel()">✖ Stop Tunnel</button>
+      </div>
+      <div class="tunnel-status" id="tunnel-status">
+        {% if server.tunnel_ip %}
+        Tunnel active → {{ server.tunnel_ip }}:{{ server.tunnel_port }}
+        {% else %}
+        Tunnel not running.<br>
+        Make sure <code>playit</code> is installed on this machine.
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Subdomain info -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">Cloudflare Subdomain</div>
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.7">
+        Route <strong style="color:var(--text);font-family:var(--mono)">{{ server.subdomain }}.your-domain.com</strong>
+        to this panel via Cloudflare.<br><br>
+        Add a CNAME record pointing to your panel's hostname.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─── Console ─── -->
+  <div class="console-area">
+    <div class="console-header">
+      <div class="console-dot"></div>
+      <div class="console-title">{{ server.name }} Console</div>
+      <button class="console-clear" onclick="clearConsole()">Clear</button>
+    </div>
+
+    <div class="console-output" id="console-output">
+      {% for line in logs %}
+      <div class="log-line {{ 'panel' if '[Panel]' in line else ('playit' if '[playit]' in line else ('error' if 'ERROR' in line or 'WARN' in line.upper() else 'info')) }}">{{ line }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="console-input-row">
+      <div class="console-prompt">&gt;</div>
+      <input class="console-input" id="cmd-input" type="text" placeholder="Enter a command (e.g. list, say Hello)…" autocomplete="off" onkeydown="if(event.key==='Enter') sendCommand()" />
+      <button class="console-send" onclick="sendCommand()">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- New World Confirm Modal -->
+<div class="modal-backdrop" id="confirm-modal">
+  <div class="modal">
+    <div class="modal-title">🌍 Generate New World?</div>
+    <div class="modal-body">
+      This will <strong>permanently delete</strong> the current world and generate a fresh one.
+      The server will restart automatically.<br><br>
+      This cannot be undone.
+    </div>
+    <div class="modal-actions">
+      <button class="btn-inline btn-inline-ghost" onclick="closeConfirm()">Cancel</button>
+      <button class="btn-inline btn-inline-red" onclick="doNewWorld()">Delete & Regenerate</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+const SERVER_ID = "{{ server_id }}";
+let ws = null;
+let autoScroll = true;
+
+// ─── WebSocket Console ────────────────────────────────────────────────────────
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/console/${SERVER_ID}`);
+
+  ws.onopen = () => addLine('[Panel] Console connected.', 'panel');
+
+  ws.onmessage = (e) => {
+    if (e.data === '') return; // ping
+    addLine(e.data);
+  };
+
+  ws.onclose = () => {
+    addLine('[Panel] Console disconnected. Reconnecting in 3s…', 'panel');
+    setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function addLine(text, forceClass) {
+  const out = document.getElementById('console-output');
+  const div = document.createElement('div');
+  div.className = 'log-line';
+  if (forceClass) {
+    div.classList.add(forceClass);
+  } else if (text.includes('[Panel]')) {
+    div.classList.add('panel');
+  } else if (text.includes('[playit]')) {
+    div.classList.add('playit');
+  } else if (/ERROR|WARN|Exception/.test(text)) {
+    div.classList.add('error');
+  } else {
+    div.classList.add('info');
+  }
+  div.textContent = text;
+  out.appendChild(div);
+  if (autoScroll) out.scrollTop = out.scrollHeight;
+}
+
+function clearConsole() {
+  document.getElementById('console-output').innerHTML = '';
+}
+
+// Track auto-scroll
+document.getElementById('console-output').addEventListener('scroll', function() {
+  const el = this;
+  autoScroll = el.scrollHeight - el.clientHeight - el.scrollTop < 40;
+});
+
+// ─── Commands ────────────────────────────────────────────────────────────────
+
+async function sendCommand() {
+  const input = document.getElementById('cmd-input');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  input.value = '';
+  const res = await fetch(`/api/servers/${SERVER_ID}/command`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({command: cmd})
+  });
+  const data = await res.json();
+  if (data.error) toast(data.error, 'error');
+}
+
+// ─── Server Actions ──────────────────────────────────────────────────────────
+
+async function startServer() {
+  const res = await fetch(`/api/servers/${SERVER_ID}/start`, {method:'POST'});
+  const data = await res.json();
+  if (data.error) toast(data.error, 'error');
+  else toast('Server starting…', 'success');
+  pollStatus();
+}
+
+async function stopServer() {
+  const res = await fetch(`/api/servers/${SERVER_ID}/stop`, {method:'POST'});
+  const data = await res.json();
+  if (data.error) toast(data.error, 'error');
+  else toast('Stop command sent.', 'success');
+  pollStatus();
+}
+
+async function restartServer() {
+  const res = await fetch(`/api/servers/${SERVER_ID}/restart`, {method:'POST'});
+  const data = await res.json();
+  if (data.error) toast(data.error, 'error');
+  else toast('Restarting…', 'success');
+}
+
+function confirmNewWorld() {
+  document.getElementById('confirm-modal').classList.add('open');
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-modal').classList.remove('open');
+}
+
+async function doNewWorld() {
+  closeConfirm();
+  const res = await fetch(`/api/servers/${SERVER_ID}/new-world`, {method:'POST'});
+  const data = await res.json();
+  if (data.error) toast(data.error, 'error');
+  else toast('World deleted! Restarting…', 'success');
+}
+
+// ─── Tunnel ──────────────────────────────────────────────────────────────────
+
+async function startTunnel() {
+  const secret = document.getElementById('playit-secret').value.trim();
+  const res = await fetch(`/api/servers/${SERVER_ID}/tunnel/start`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({secret})
+  });
+  const data = await res.json();
+  if (data.error) toast(data.error, 'error');
+  else toast('Tunnel starting… watch console for address.', 'success');
+}
+
+async function stopTunnel() {
+  const res = await fetch(`/api/servers/${SERVER_ID}/tunnel/stop`, {method:'POST'});
+  const data = await res.json();
+  if (data.error) toast(data.error, 'error');
+  else {
+    toast('Tunnel stopped.', 'success');
+    document.getElementById('connect-addr').textContent = 'No tunnel active';
+    document.getElementById('connect-addr').classList.add('pending');
+    document.getElementById('tunnel-status').textContent = 'Tunnel not running.';
+  }
+}
+
+// ─── Status polling ──────────────────────────────────────────────────────────
+
+async function pollStatus() {
+  try {
+    const res = await fetch(`/api/servers/${SERVER_ID}/status`);
+    const data = await res.json();
+
+    const dot = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+
+    if (data.running) {
+      dot.style.background = 'var(--green)';
+      dot.style.boxShadow = '0 0 6px var(--green)';
+      text.textContent = 'running';
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+    } else {
+      dot.style.background = 'var(--text-dim)';
+      dot.style.boxShadow = 'none';
+      text.textContent = data.status || 'stopped';
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+    }
+
+    // Update tunnel display
+    if (data.tunnel_ip) {
+      const addr = `${data.tunnel_ip}:${data.tunnel_port}`;
+      const el = document.getElementById('connect-addr');
+      el.textContent = addr;
+      el.classList.remove('pending');
+      document.getElementById('tunnel-status').textContent = `Tunnel active → ${addr}`;
+    }
+  } catch(e) {}
+}
+
+function copyAddr() {
+  const addr = document.getElementById('connect-addr').textContent.trim();
+  navigator.clipboard.writeText(addr).then(() => toast('Address copied!', 'success'));
+}
+
+function toast(msg, type='success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+
+connectWS();
+pollStatus();
+setInterval(pollStatus, 4000);
+
+// Initial scroll
+const out = document.getElementById('console-output');
+out.scrollTop = out.scrollHeight;
+
+// Modal close on backdrop
+document.getElementById('confirm-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeConfirm();
+});
+</script>
+</body>
+</html>

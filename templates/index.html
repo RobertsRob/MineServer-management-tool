@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MC Panel — Server Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --green: #3fb950;
+    --green-dim: #1a4a1e;
+    --red: #f85149;
+    --red-dim: #3d1a1a;
+    --yellow: #d29922;
+    --yellow-dim: #3d2e0a;
+    --blue: #58a6ff;
+    --blue-dim: #1a2a3d;
+    --purple: #bc8cff;
+    --text: #e6edf3;
+    --text-muted: #7d8590;
+    --text-dim: #484f58;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+    --radius: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+  }
+
+  /* ─── Top nav ─── */
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--green);
+    text-decoration: none;
+  }
+
+  .nav-logo .cube {
+    width: 28px; height: 28px;
+    background: var(--green);
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+  }
+
+  nav .spacer { flex: 1; }
+
+  .nav-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+
+  /* ─── Layout ─── */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+
+  .page-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .page-subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* ─── Buttons ─── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    border: none;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity .15s, filter .15s;
+    text-decoration: none;
+  }
+
+  .btn:hover { opacity: .85; }
+  .btn:active { filter: brightness(.9); }
+  .btn-primary { background: var(--green); color: #0d1117; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  /* ─── Server cards grid ─── */
+  .servers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  .server-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: border-color .2s;
+  }
+
+  .server-card:hover { border-color: #444c56; }
+
+  .card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .server-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    background: var(--green-dim);
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .card-title { font-weight: 600; font-size: 15px; line-height: 1.3; }
+  .card-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; font-family: var(--mono); }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+  }
+
+  .status-running .status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-stopped .status-dot { background: var(--text-dim); }
+  .status-installing .status-dot { background: var(--yellow); animation: pulse 1s infinite; }
+  .status-error .status-dot { background: var(--red); }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  .status-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-family: var(--mono);
+  }
+
+  .tunnel-info {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 12px 0;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .tunnel-info .label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+  .tunnel-info .addr { color: var(--green); margin-top: 2px; font-size: 13px; font-weight: 600; }
+  .tunnel-info .addr.pending { color: var(--yellow); }
+
+  .card-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 80px 24px;
+    color: var(--text-muted);
+  }
+
+  .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-state h3 { font-size: 18px; color: var(--text); margin-bottom: 8px; }
+  .empty-state p { font-size: 14px; }
+
+  /* ─── Modal ─── */
+  .modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 520px;
+    padding: 28px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .form-group { margin-bottom: 18px; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .label-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 6px;
+  }
+
+  input, select {
+    width: 100%;
+    padding: 9px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    outline: none;
+    transition: border-color .15s;
+  }
+
+  input:focus, select:focus { border-color: var(--blue); }
+  input[type="number"] { font-family: var(--mono); }
+
+  .subdomain-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .subdomain-row input {
+    border-radius: 6px 0 0 6px;
+    flex: 1;
+  }
+
+  .subdomain-suffix {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    padding: 9px 12px;
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ─── Toast ─── */
+  #toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 999;
+  }
+
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    max-width: 340px;
+    animation: slideIn .2s ease;
+  }
+
+  .toast.success { border-color: var(--green); }
+  .toast.error { border-color: var(--red); }
+
+  @keyframes slideIn { from{transform:translateX(30px);opacity:0} to{transform:none;opacity:1} }
+
+  /* ─── Stats bar ─── */
+  .stats-bar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    flex: 1;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-top: 2px;
+  }
+
+  select option { background: var(--surface2); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">
+    <span class="cube">⛏</span>
+    MC Panel
+  </a>
+  <span class="spacer"></span>
+  <span class="nav-badge">port 8467</span>
+</nav>
+
+<div class="container">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Server Manager</div>
+      <div class="page-subtitle">Manage your Minecraft servers, tunnels, and subdomains</div>
+    </div>
+    <button class="btn btn-primary" onclick="openCreateModal()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New Server
+    </button>
+  </div>
+
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat">
+      <div class="stat-value" id="stat-total">—</div>
+      <div class="stat-label">Total Servers</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-running">—</div>
+      <div class="stat-label">Running</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-tunnels">—</div>
+      <div class="stat-label">Tunnels Active</div>
+    </div>
+  </div>
+
+  <div id="servers-container">
+    <div class="empty-state">
+      <div class="icon">🧱</div>
+      <h3>No servers yet</h3>
+      <p>Create your first Minecraft server to get started.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Create Server Modal -->
+<div class="modal-backdrop" id="create-modal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>⛏</span> Create New Server
+    </div>
+
+    <div class="form-group">
+      <label>Server Name</label>
+      <input type="text" id="f-name" placeholder="My Survival Server" />
+    </div>
+
+    <div class="form-group">
+      <label>Subdomain <span class="label-hint">for Cloudflare routing</span></label>
+      <div class="subdomain-row">
+        <input type="text" id="f-subdomain" placeholder="survival" />
+        <span class="subdomain-suffix">.mineserver.com</span>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Server Type</label>
+        <select id="f-type">
+          <option value="vanilla">Vanilla</option>
+          <option value="paper" selected>Paper (recommended)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>MC Version</label>
+        <input type="text" id="f-version" value="1.21.1" placeholder="1.21.1" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>RAM (MB)</label>
+        <input type="number" id="f-ram" value="1024" min="512" step="256" />
+      </div>
+      <div class="form-group">
+        <label>Port</label>
+        <input type="number" id="f-port" value="25565" min="25000" max="30000" />
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeCreateModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="createServer()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Create Server
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script>
+let serversData = {};
+
+async function fetchServers() {
+  try {
+    const res = await fetch('/api/servers');
+    const data = await res.json();
+    serversData = data;
+    renderServers(data);
+    updateStats(data);
+  } catch(e) {}
+}
+
+function updateStats(data) {
+  const arr = Object.values(data);
+  document.getElementById('stat-total').textContent = arr.length;
+  document.getElementById('stat-running').textContent = arr.filter(s => s.status === 'running').length;
+  document.getElementById('stat-tunnels').textContent = arr.filter(s => s.tunnel_ip).length;
+}
+
+function renderServers(data) {
+  const container = document.getElementById('servers-container');
+  const entries = Object.entries(data);
+
+  if (!entries.length) {
+    container.innerHTML = `<div class="empty-state">
+      <div class="icon">🧱</div>
+      <h3>No servers yet</h3>
+      <p>Create your first Minecraft server to get started.</p>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = `<div class="servers-grid">${entries.map(([id, s]) => renderCard(id, s)).join('')}</div>`;
+}
+
+function renderCard(id, s) {
+  const statusClass = `status-${s.status || 'stopped'}`;
+  const statusLabel = s.status || 'stopped';
+  const running = s.status === 'running';
+
+  const tunnelHtml = s.tunnel_ip
+    ? `<div class="tunnel-info">
+        <div class="label">Connect Address</div>
+        <div class="addr">${s.tunnel_ip}:${s.tunnel_port}</div>
+       </div>`
+    : `<div class="tunnel-info">
+        <div class="label">Connect Address</div>
+        <div class="addr pending">No tunnel — start playit.gg</div>
+       </div>`;
+
+  return `
+  <div class="server-card" id="card-${id}">
+    <div class="card-header">
+      <div class="server-icon">⛏</div>
+      <div style="flex:1">
+        <div class="card-title">${esc(s.name)}</div>
+        <div class="card-sub">${esc(s.subdomain)}.mineserver.trokhost.com</div>
+      </div>
+      <div class="${statusClass}" style="display:flex;align-items:center">
+        <span class="status-dot"></span>
+        <span class="status-label">${statusLabel}</span>
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--text-muted);font-family:var(--mono);margin-bottom:4px">
+      ${esc(s.server_type)} ${esc(s.version)} · port ${s.port} · ${s.ram}MB RAM
+    </div>
+
+    ${tunnelHtml}
+
+    <div class="card-actions">
+      <a href="/server/${id}" class="btn btn-ghost btn-sm">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M12 8v8"/></svg>
+        Console
+      </a>
+      ${running
+        ? `<button class="btn btn-ghost btn-sm" onclick="stopServer('${id}')">⏹ Stop</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="startServer('${id}')">▶ Start</button>`
+      }
+      <button class="btn btn-ghost btn-sm" onclick="deleteServer('${id}')">🗑</button>
+    </div>
+  </div>`;
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function startServer(id) {
+  const res = await fetch(`/api/servers/${id}/start`, {method:'POST'});
+  const data = await res.json();
+  if (data.error) toast(data.error, 'error');
+  else { toast('Server starting…', 'success'); fetchServers(); }
+}
+
+async function stopServer(id) {
+  const res = await fetch(`/api/servers/${id}/stop`, {method:'POST'});
+  const data = await res.json();
+  if (data.error) toast(data.error, 'error');
+  else { toast('Stop command sent.', 'success'); fetchServers(); }
+}
+
+async function deleteServer(id) {
+  if (!confirm('Delete this server and all its files?')) return;
+  await fetch(`/api/servers/${id}`, {method:'DELETE'});
+  toast('Server deleted.', 'success');
+  fetchServers();
+}
+
+function openCreateModal() {
+  document.getElementById('create-modal').classList.add('open');
+}
+function closeCreateModal() {
+  document.getElementById('create-modal').classList.remove('open');
+}
+
+async function createServer() {
+  const payload = {
+    name: document.getElementById('f-name').value,
+    subdomain: document.getElementById('f-subdomain').value,
+    version: document.getElementById('f-version').value,
+    ram: document.getElementById('f-ram').value,
+    port: document.getElementById('f-port').value,
+    server_type: document.getElementById('f-type').value,
+  };
+  if (!payload.name || !payload.subdomain) { toast('Name and subdomain required.', 'error'); return; }
+  const res = await fetch('/api/servers', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (data.error) { toast(data.error, 'error'); return; }
+  toast('Server creation started! Downloading jar…', 'success');
+  closeCreateModal();
+  fetchServers();
+}
+
+function toast(msg, type='success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// Poll every 5s
+fetchServers();
+setInterval(fetchServers, 5000);
+
+// Close modal on backdrop click
+document.getElementById('create-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeCreateModal();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "a144106e": {
+    "id": "a144106e",
+    "name": "abc",
+    "subdomain": "abc",
+    "version": "1.21.1",
+    "ram": "1024",
+    "port": 25565,
+    "server_type": "paper",
+    "status": "running",
+    "jar_url": "https://api.papermc.io/v2/projects/paper/versions/1.21.1/builds/133/downloads/paper-1.21.1-133.jar",
+    "jar_path": "C:\\Users\\troks\\Desktop\\MinecraftServerWeb\\servers\\a144106e\\server.jar",
+    "dir": "C:\\Users\\troks\\Desktop\\MinecraftServerWeb\\servers\\a144106e",
+    "tunnel_ip": null,
+    "tunnel_port": null
+  }
+}
